@@ -17,9 +17,9 @@ A production-grade, highly scalable, distributed real-time multiplayer drawing a
 ## 🗺️ Implementation Roadmap
 
 ### 📦 Phase 1: Foundations & Core Networking (The Skeleton)
-* [ ] Initialize standard Go directory layout (`cmd/`, `internal/game/`, `internal/transport/`).
-* [ ] Setup standard HTTP router using `gin-gonic/gin` with health checks and CORS.
-* [ ] Implement ephemeral guest session handler issuing lightweight tokenized session IDs.
+* [✓] Initialize standard Go directory layout (`cmd/`, `internal/game/`, `internal/transport/`).
+* [✓] Setup standard HTTP router using `gin-gonic/gin` with health checks and CORS.
+* [✓] Implement ephemeral guest session handler issuing lightweight tokenized session IDs.
 * [ ] Establish low-overhead WebSocket handshake mechanics and origin validation using `gorilla/websocket`.
 * [ ] Construct thread-safe dual-goroutine client pipelines (`readPump`/`writePump`) with Ping/Pong keep-alives.
 * [ ] Build a channel-driven in-memory `Hub` managing thread-safe client registration and event dispatching.

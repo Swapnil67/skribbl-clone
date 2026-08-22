@@ -295,3 +295,20 @@ setInterval(() => {
     ===================================================== */
 
 setTimeout(resizeCanvas, 100);
+
+console.log("HERE");
+
+// Wait for the browser to load the page content first
+window.addEventListener("DOMContentLoaded", () => {
+  
+  let socket = new WebSocket("ws://localhost:8080/ws?session_id=test-uuid-123");
+
+  socket.onopen = () => {
+    console.log("Connected to Go Server! ✅");
+    socket.send("PING", "Hello From Client")
+  };
+
+  socket.onmessage = (event) => {
+    console.log("Message from server: ", event.data);
+  };
+});

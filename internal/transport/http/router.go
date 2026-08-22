@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"skribbl-clone/internal/transport/ws"
 )
 
 func NewRouter() *gin.Engine {
@@ -13,6 +15,8 @@ func NewRouter() *gin.Engine {
 	// * 1. Cors Middleware
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
+
+	wsHandler := ws.NewHandler()
 
 	// * 2. Load HTML templates & static files (JS/CSS)
 	r.LoadHTMLGlob("web/templates/*")
@@ -30,6 +34,9 @@ func NewRouter() *gin.Engine {
 	{
 		v1.POST("/sessions", handleCreateGuestSession)
 	}
+
+	// * WebSocket Endpoint
+	r.GET("/ws", wsHandler.HandleWebSocket)
 
 	return r
 }
