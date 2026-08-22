@@ -15,12 +15,11 @@ import (
 )
 
 func main() {
-	// 1. Initialize and run central Hub in background
-	hub := ws.NewHub()
-	go hub.Run()
+	// * Initialize RoomManager (Replaces the single global Hub)
+	manager := ws.NewRoomManager()
 
 	// * 1. Initialize Gin router with Hub dependency
-	router := appHTTP.NewRouter(hub)
+	router := appHTTP.NewRouter(manager)
 
 	// * 2. Configure HTTP Server with explicit timeouts
 	srv := &http.Server{

@@ -17,6 +17,12 @@ let erasing = false;
 // Unique session identifier for this tab
 const sessionId = "user-" + Math.floor(Math.random() * 10000);
 
+// * Extract URL query params (e.g., ?room_id=ABC123)
+function getQueryParam(param) {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get(param);
+}
+
 /* =====================================================
        INIT
     ===================================================== */
@@ -27,17 +33,20 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 function initCanvasSync() {
+  const roomId = getQueryParam("room_id") || "DEFAULT";
+
   resizeCanvas()
-  connectWebSocket()
+  connectWebSocket(roomId)
 }
 
-function connectWebSocket() {
+function connectWebSocket(roomId) {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const host = window.location.host;
-  socket = new WebSocket(`${protocol}//${host}/ws?session_id=${sessionId}`);
+  const wsUrl = `${protocol}//${host}/ws?room_id=${encodeURIComponent(roomId)}&session_id=${encodeURIComponent(sessionId)}`;
+  socket = new WebSocket(wsUrl);
 
   socket.onopen = () => {
-    console.log(`Connected to Go Server! ✅ (Session: ${sessionId})`);
+    console.log(`Connected to Room: [${roomId}] as Session: [${sessionId}] ✅`);
   };
 
   socket.onmessage = (event) => {

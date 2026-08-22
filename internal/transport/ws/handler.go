@@ -18,30 +18,49 @@ var upgrader = websocket.Upgrader{
 }
 
 type Handler struct {
-	// * hub will manage client lifecycle
-	hub *Hub
+	// hub *Hub // * hub will manage client lifecycle
+	Manager *RoomManager // * RoomManager for Room lifecycle
 }
 
-func NewHandler(hub *Hub) *Handler {
+func NewHandler(manager *RoomManager) *Handler {
 	return &Handler{
-		hub: hub,
+		Manager: manager,
 	}
 }
 
 func (h *Handler) HandleWebSocket(c *gin.Context) {
-	// 1. Extract session_id from Cookie or Query Param (?session_id=...)
+	// * 1. Extract session_id from Cookie or Query Param (?session_id=...)
 	sessionID, err := c.Cookie("session_id")
 	if err != nil || sessionID == "" {
 		sessionID = c.Query("session_id")
 	}
 
 	if sessionID == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "Missing session_id. Create a session first.",
-		})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing session_id. Create a session first."})
 		return
 	}
 
+	// * 2. Extract room_id
+	roomID := c.Query("room_id")
+	if roomID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing room_id query parameter"})
+		return
+	}
+
+	// * 3. Lookup Room
+	room, err := h.Manager.GetRoom(roomID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Room does not exist or has expired"})
+		return
+	}
+
+	// * 4. Validate capacity
+	if room.ClientCount() >= room.MaxPlayers {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Room is already full"})
+		return
+	}
+
+	// * 5. Upgrade connection
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Printf("WebSocket upgrade failed: %v", err)
@@ -50,8 +69,8 @@ func (h *Handler) HandleWebSocket(c *gin.Context) {
 
 	log.Printf("Client connected: session_id=%s, remote_addr=%s", sessionID, conn.RemoteAddr())
 
-	client := NewClient(h.hub, conn, sessionID)
-	h.hub.Register <- client
+	client := NewClient(room, conn, sessionID)
+	room.Register <- client
 
 	// * Start read and write pumps in dedicated goroutines
 	go client.WritePump()

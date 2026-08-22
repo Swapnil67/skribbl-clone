@@ -25,14 +25,15 @@ const (
 
 type Client struct {
 	Hub       *Hub
+	Room      *Room
 	Conn      *websocket.Conn
 	SessionID string
 	Send      chan []byte
 }
 
-func NewClient(hub *Hub, conn *websocket.Conn, sessionID string) *Client {
+func NewClient(room *Room, conn *websocket.Conn, sessionID string) *Client {
 	return &Client{
-		Hub:       hub,
+		Room:      room,
 		Conn:      conn,
 		SessionID: sessionID,
 		Send:      make(chan []byte, 256), // * Buffered channel of outbound messages,
