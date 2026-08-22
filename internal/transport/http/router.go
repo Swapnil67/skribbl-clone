@@ -28,7 +28,7 @@ func NewRouter() *gin.Engine {
 	// * 5. API Endpoints
 	v1 := r.Group("/api/v1")
 	{
-		v1.POST("/session", handleCreateGuestSession)
+		v1.POST("/sessions", handleCreateGuestSession)
 	}
 
 	return r
@@ -53,8 +53,5 @@ func handleReadinessCheck(c *gin.Context) {
 	})
 }
 
-func handleCreateGuestSession(c *gin.Context) {
-	c.JSON(http.StatusCreated, gin.H{
-		"message": "session endpoint placeholder",
-	})
-}
+// Unable to get relative path between
+// file:///Users/apple/Developer/probe/skribble-clone/internal/transport/http/router.go and ; Base path '' must be an absolute path
