@@ -17,6 +17,7 @@ func NewRouter(manager *ws.RoomManager) *gin.Engine {
 	r.Use(gin.Recovery())
 
 	wsHandler := ws.NewHandler(manager)
+	roomHandler := NewRoomHandler(manager)
 
 	// * 2. Load HTML templates & static files (JS/CSS)
 	r.LoadHTMLGlob("web/templates/*")
@@ -32,7 +33,12 @@ func NewRouter(manager *ws.RoomManager) *gin.Engine {
 	// * 5. API Endpoints
 	v1 := r.Group("/api/v1")
 	{
+		// * sessions
 		v1.POST("/sessions", handleCreateGuestSession)
+
+		// * Rooms
+		v1.POST("/rooms", roomHandler.HandleCreateRoom)
+		v1.GET("/rooms/:code", roomHandler.HandleGetRoom)
 	}
 
 	// * WebSocket Endpoint
@@ -59,6 +65,3 @@ func handleReadinessCheck(c *gin.Context) {
 		"status": "READY",
 	})
 }
-
-// Unable to get relative path between
-// file:///Users/apple/Developer/probe/skribble-clone/internal/transport/http/router.go and ; Base path '' must be an absolute path
