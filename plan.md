@@ -28,24 +28,24 @@ A production-grade, highly scalable, distributed real-time multiplayer drawing a
 
 ### 🎮 Phase 2: In-Memory Game Loops & Room Concurrency (The Brain)
 
-* [ ] **Multi-Room Manager & Partitioned Hubs:** Refactor the global Hub into isolated per-room hubs using `sync.RWMutex` to partition drawing traffic and lifecycle events.
-* [ ] **Channel Matchmaking Engine:** Build a centralized pool worker goroutine routing incoming guest sessions into 5-player public rooms or private invite codes.
-* [ ] **State Machine & Ticker Game Loop:** Manage per-room match phases (`LOBBY`, `WORD_SELECTION`, `DRAWING`, `ROUND_SUMMARY`) using non-blocking Go `time.Ticker` bindings.
-* [ ] **Fuzzy Guess Matcher:** Implement a Levenshtein distance string similarity engine to validate chat guesses and send private "close guess" alerts.
-* [ ] **Dynamic Scoring & Turn Arbiter:** Calculate decay scores based on response latency, rotate active drawer permissions, and censor correct guesses in public room chat.
+* [✓] **Multi-Room Manager & Partitioned Hubs:** Refactor the global Hub into isolated per-room hubs using `sync.RWMutex` to partition drawing traffic and lifecycle events.
+* [✓] **Channel Matchmaking Engine:** Build a centralized pool worker goroutine routing incoming guest sessions into 5-player public rooms or private invite codes.
+* [] **State Machine & Ticker Game Loop:** Manage per-room match phases (`LOBBY`, `WORD_SELECTION`, `DRAWING`, `ROUND_SUMMARY`) using non-blocking Go `time.Ticker` bindings.
+* [] **Fuzzy Guess Matcher:** Implement a Levenshtein distance string similarity engine to validate chat guesses and send private "close guess" alerts.
+* [] **Dynamic Scoring & Turn Arbiter:** Calculate decay scores based on response latency, rotate active drawer permissions, and censor correct guesses in public room chat.
 
 ### 🌐 Phase 3: Distributed State & Scale (The Senior Showcase)
 
-* [ ] **Redis Pub/Sub Transport Bus:** Decouple room hubs by routing drawing streams and chat events through per-room Redis channels (`room:{id}:events`).
-* [ ] **Distributed Room State in Redis:** Persist active room metadata, player scores, and round states into Redis Hashes with TTLs for cross-server visibility.
-* [ ] **Ephemeral Session Reconnection:** Cache disconnected guest state in Redis for 30 seconds to allow seamless browser refresh recovery without point loss.
-* [ ] **Token-Bucket Chat Rate Limiter:** Implement a per-socket rate limiter in Go to throttle spam and mitigate automated dictionary attacks on guesses.
+* [] **Redis Pub/Sub Transport Bus:** Decouple room hubs by routing drawing streams and chat events through per-room Redis channels (`room:{id}:events`).
+* [] **Distributed Room State in Redis:** Persist active room metadata, player scores, and round states into Redis Hashes with TTLs for cross-server visibility.
+* [] **Ephemeral Session Reconnection:** Cache disconnected guest state in Redis for 30 seconds to allow seamless browser refresh recovery without point loss.
+* [] **Token-Bucket Chat Rate Limiter:** Implement a per-socket rate limiter in Go to throttle spam and mitigate automated dictionary attacks on guesses.
 
 ### 📊 Phase 4: Production Diagnostics & Observability (The Production Ready Check)
 
-* [ ] **Structured Logging with `log/slog`:** Implement context-aware JSON structured logging tagged with `session_id` and `room_id`.
-* [ ] **Prometheus Metrics Scrape Target:** Expose `/metrics` tracking active rooms, connected WebSocket clients, draw frame rates, and guess evaluation latencies.
-* [ ] **Refined Graceful Draining:** Extend existing signal traps to broadcast match-ending notifications over sockets and wait for game tickers to cleanly exit before process termination.
+* [] **Structured Logging with `log/slog`:** Implement context-aware JSON structured logging tagged with `session_id` and `room_id`.
+* [] **Prometheus Metrics Scrape Target:** Expose `/metrics` tracking active rooms, connected WebSocket clients, draw frame rates, and guess evaluation latencies.
+* [] **Refined Graceful Draining:** Extend existing signal traps to broadcast match-ending notifications over sockets and wait for game tickers to cleanly exit before process termination.
 
 ---
 
@@ -57,32 +57,3 @@ A production-grade, highly scalable, distributed real-time multiplayer drawing a
 > * Architected a concurrent matchmaking system using **Go Goroutines and Channels**, reducing player wait times through an efficient background worker pool.
 > * Mitigated data-race vulnerabilities in multi-threaded game state mutations by implementing strict memory locking mechanisms with **sync.Mutex**.
 > * Built highly optimized WebSocket event handlers utilizing `gorilla/websocket`, minimizing memory overhead per active connection.
-
-
-### Summary of Structure
-
-```
-                  ┌────────────────────────────────────────┐
-                  │              RoomManager               │
-                  │   - Manages map[room_id]*Room          │
-                  │   - Thread-safe lookup with RWMutex    │
-                  └──────────────────┬─────────────────────┘
-                                     │
-                     ┌───────────────┴───────────────┐
-                     ▼                               ▼
-            ┌──────────────────┐            ┌──────────────────┐
-            │      Room A      │            │      Room B      │
-            │  - Own Event Loop│            │  - Own Event Loop│
-            │  - In-Room Hub   │            │  - In-Room Hub   │
-            │  - State Machine │            │  - State Machine │
-            └────────┬─────────┘            └──────────────────┘
-                     │
-           ┌─────────┴─────────┐
-           ▼                   ▼
-    ┌─────────────┐     ┌─────────────┐
-    │  Client 1   │     │  Client 2   │
-    │  (read/write│     │  (read/write│
-    │    pumps)   │     │    pumps)   │
-    └─────────────┘     └─────────────┘
-
-```
