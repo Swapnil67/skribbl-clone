@@ -1,0 +1,16 @@
+version: '3'
+
+tasks:
+  run:
+    desc: run the cmd/main.go
+    # Tells task to kill the existing server before starting a new one
+    method: checksum 
+    sources:
+      - './**/*.go'
+      - './templates/**/*'
+    dir: './cmd'     
+    generates:
+      - './bin/server'
+    cmds:
+      - go build -o ./bin/server ./main.go
+      - ./bin/server
