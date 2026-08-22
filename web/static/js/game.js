@@ -300,15 +300,44 @@ console.log("HERE");
 
 // Wait for the browser to load the page content first
 window.addEventListener("DOMContentLoaded", () => {
-  
-  let socket = new WebSocket("ws://localhost:8080/ws?session_id=test-uuid-123");
+  const sessionId = "test-uuid-" + Math.floor(Math.random() * 1000);
+  const socket = new WebSocket(`ws://localhost:8080/ws?session_id=${sessionId}`);
 
-  socket.onopen = () => {
-    console.log("Connected to Go Server! ✅");
-    socket.send("PING", "Hello From Client")
+socket.onopen = () => {
+    console.log(`Connected to Go Server! ✅ (Session: ${sessionId})`);
+
+    // Send initial handshake event as JSON
+    const initEvent = {
+      type: "CHAT_MESSAGE",
+      payload: {
+        message: "Hello from client " + sessionId
+      }
+    };
+    socket.send(JSON.stringify(initEvent));
   };
 
   socket.onmessage = (event) => {
-    console.log("Message from server: ", event.data);
+    // writePump can batch multiple messages separated by \n
+    const rawMessages = event.data.split("\n");
+
+    rawMessages.forEach((rawMsg) => {
+      if (!rawMsg.trim()) return;
+
+      try {
+        const parsed = JSON.parse(rawMsg);
+        console.log("Parsed event from server:", parsed);
+      } catch (err) {
+        console.log("Raw message from server:", rawMsg);
+      }
+    });
   };
+
+  socket.onerror = (err) => {
+    console.error("WebSocket Error ❌:", err);
+  };
+
+  socket.onclose = (event) => {
+    console.warn(`WebSocket Disconnected ⚠️ (Code: ${event.code}, Reason: ${event.reason})`);
+  };
+
 });

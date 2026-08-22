@@ -18,12 +18,14 @@ var upgrader = websocket.Upgrader{
 }
 
 type Handler struct {
-	// TODO
-	// hub will manage client lifecycle
+	// * hub will manage client lifecycle
+	hub *Hub
 }
 
-func NewHandler() *Handler {
-	return &Handler{}
+func NewHandler(hub *Hub) *Handler {
+	return &Handler{
+		hub: hub,
+	}
 }
 
 func (h *Handler) HandleWebSocket(c *gin.Context) {
@@ -48,23 +50,10 @@ func (h *Handler) HandleWebSocket(c *gin.Context) {
 
 	log.Printf("Client connected: session_id=%s, remote_addr=%s", sessionID, conn.RemoteAddr())
 
-	// * Temporary echo loop for Phase 1 smoke testing
-	// (Replaced by readPump/writePump in the next step)
-	go func(wsConn *websocket.Conn, sID string) {
-		defer wsConn.Close()
-		for {
-			messageType, p, err := wsConn.ReadMessage()
-			if err != nil {
-				log.Printf("Client disconnected: session_id=%s, err=%v", sID, err)
-				break
-			}
+	client := NewClient(h.hub, conn, sessionID)
+	h.hub.Register <- client
 
-			// Echo back payload to verify handshake
-			if err := wsConn.WriteMessage(messageType, p); err != nil {
-				log.Printf("Write error: %v", err)
-				break
-			}
-		}
-	}(conn, sessionID)
-
+	// * Start read and write pumps in dedicated goroutines
+	go client.WritePump()
+	go client.ReadPump()
 }

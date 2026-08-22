@@ -9,14 +9,14 @@ import (
 	"skribbl-clone/internal/transport/ws"
 )
 
-func NewRouter() *gin.Engine {
+func NewRouter(hub *ws.Hub) *gin.Engine {
 	r := gin.New()
 
 	// * 1. Cors Middleware
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
 
-	wsHandler := ws.NewHandler()
+	wsHandler := ws.NewHandler(hub)
 
 	// * 2. Load HTML templates & static files (JS/CSS)
 	r.LoadHTMLGlob("web/templates/*")

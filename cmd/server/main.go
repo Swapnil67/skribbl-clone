@@ -11,11 +11,16 @@ import (
 	"time"
 
 	appHTTP "skribbl-clone/internal/transport/http"
+	"skribbl-clone/internal/transport/ws"
 )
 
 func main() {
-	// * 1. Initialize Gin router
-	router := appHTTP.NewRouter()
+	// 1. Initialize and run central Hub in background
+	hub := ws.NewHub()
+	go hub.Run()
+
+	// * 1. Initialize Gin router with Hub dependency
+	router := appHTTP.NewRouter(hub)
 
 	// * 2. Configure HTTP Server with explicit timeouts
 	srv := &http.Server{
