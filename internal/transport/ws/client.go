@@ -1,7 +1,9 @@
 package ws
 
 import (
+	"encoding/json"
 	"log"
+	"skribbl-clone/internal/game"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -56,7 +58,7 @@ func (c *Client) ReadPump() {
 
 	// * Infinite loop for reading client ws messages
 	for {
-		_, message, err := c.Conn.ReadMessage()
+		_, rawMessage, err := c.Conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("WebSocket read error (session_id=%s): %v", c.SessionID, err)
@@ -64,8 +66,22 @@ func (c *Client) ReadPump() {
 			break
 		}
 
-		// * Forward message to the Hub for fan-out
-		c.Hub.Broadcast <- message
+		// * 1. Process and validate the raw JSON into an OutboundEvent
+		outbountEvent, err := game.ProcessIncomingMessage(c.SessionID, rawMessage)
+		if err != nil {
+			log.Printf("Invalid message from %s: %v", c.SessionID, err)
+			break
+		}
+
+		// * 2. Serialize back to JSON bytes for the Hub to fan-out
+		broadcaseBytes, err := json.Marshal(outbountEvent)
+		if err != nil {
+			log.Printf("Marshal error: %v", err)
+			continue
+		}
+
+		// * 3. Forward clean payload to the Hub for fan-out
+		c.Hub.Broadcast <- broadcaseBytes
 	}
 }
 

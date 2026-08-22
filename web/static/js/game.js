@@ -2,17 +2,124 @@
        CANVAS
     ===================================================== */
 
+    // --- Global State ---
 const canvas = document.getElementById("canvas");
-
 const ctx = canvas.getContext("2d");
 
+let socket = null;
 let drawing = false;
-let lastX = 0;
-let lastY = 0;
+let lastX = 0, lastY = 0;
 
 let color = "#25232b";
 let size = 5;
 let erasing = false;
+
+// Unique session identifier for this tab
+const sessionId = "user-" + Math.floor(Math.random() * 10000);
+
+/* =====================================================
+       INIT
+    ===================================================== */
+
+// Initialize on page load
+window.addEventListener("DOMContentLoaded", () => {
+  initCanvasSync("paintCanvas");
+});
+
+function initCanvasSync() {
+  resizeCanvas()
+  connectWebSocket()
+}
+
+function connectWebSocket() {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const host = window.location.host;
+  socket = new WebSocket(`${protocol}//${host}/ws?session_id=${sessionId}`);
+
+  socket.onopen = () => {
+    console.log(`Connected to Go Server! ✅ (Session: ${sessionId})`);
+  };
+
+  socket.onmessage = (event) => {
+    // writePump can batch multiple messages separated by \n
+    const rawMessages = event.data.split("\n");
+
+    rawMessages.forEach((rawMsg) => {
+      if (!rawMsg.trim()) return;
+
+      try {
+        const packet = JSON.parse(rawMsg);
+        console.log("Parsed event from server:", packet);
+        handleIncomingEvent(packet);
+      } catch (err) {
+        console.log("Raw message from server:", err);
+      }
+    });
+  };
+
+  socket.onerror = (err) => {
+    console.error("WebSocket Error ❌:", err);
+  };
+
+  socket.onclose = (event) => {
+    console.warn(
+      `WebSocket Disconnected ⚠️ (Code: ${event.code}, Reason: ${event.reason})`,
+    );
+  };
+}
+
+// --- 2. Outbound Event Dispatcher ---
+function sendEvent(type, payload) {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+  socket.send(JSON.stringify({ type, payload }));
+}
+
+// --- 3. Inbound Event Router ---
+function handleIncomingEvent(packet) {
+  const { type, sender_id, payload } = packet;
+
+  // * Prevent echoing our own actions back onto the canvas
+  if (sender_id == sessionId) return;
+
+  switch (type) {
+    case "DRAW_STROKE":
+      renderStroke(payload);
+      break;
+
+    case "CLEAR_CANVAS":
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      break;
+
+    // case "UNDO_STROKE":
+    //   console.log("Undo triggered by:", sender_id);
+    //   break;
+
+    case "CHAT_MESSAGE":
+      addMessage(payload.username, payload.text)
+      break;
+  }
+}
+
+function renderStroke(stroke) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(stroke.prev_x, stroke.prev_y);
+  ctx.lineTo(stroke.curr_x, stroke.curr_y);
+
+  if (stroke.mode == "eraser") {
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.lineWidth = stroke.line_width;
+  } else {
+    ctx.globalCompositeOperation = "source-over";
+    ctx.strokeStyle = stroke?.currentColor;
+    ctx.lineWidth = stroke?.line_width;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+  }
+
+  ctx.stroke();
+  ctx.restore();
+}
 
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
@@ -54,7 +161,6 @@ function position(event) {
   if (event.touches) {
     return {
       x: event.touches[0].clientX - rect.left,
-
       y: event.touches[0].clientY - rect.top,
     };
   }
@@ -67,38 +173,35 @@ function position(event) {
 
 function startDrawing(event) {
   event.preventDefault();
-
   drawing = true;
-
   const p = position(event);
-
   lastX = p.x;
   lastY = p.y;
-
   draw(event);
 }
 
 function draw(event) {
   if (!drawing) return;
-
   event.preventDefault();
 
   const p = position(event);
 
-  ctx.beginPath();
+  // * Draw Locally
+  let currentColor = erasing ? "#ffffff" : color;
+  let mode = erasing ? "eraser" : "pencil";
+  const strokeData = {
+    prev_x: lastX,
+    prev_y: lastY,
+    curr_x: p.x,
+    curr_y: p.y,
+    color: currentColor,
+    line_width: size,
+    mode,
+  };
+  renderStroke(strokeData);
 
-  ctx.moveTo(lastX, lastY);
-
-  ctx.lineTo(p.x, p.y);
-
-  ctx.strokeStyle = erasing ? "#ffffff" : color;
-
-  ctx.lineWidth = size;
-
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-
-  ctx.stroke();
+  // * Broadcast stroke to everyone else
+  sendEvent("DRAW_STROKE", strokeData);
 
   lastX = p.x;
   lastY = p.y;
@@ -106,101 +209,87 @@ function draw(event) {
 
 function stopDrawing() {
   drawing = false;
-
   ctx.beginPath();
 }
 
 canvas.addEventListener("mousedown", startDrawing);
-
 canvas.addEventListener("mousemove", draw);
-
 canvas.addEventListener("mouseup", stopDrawing);
-
 canvas.addEventListener("mouseleave", stopDrawing);
-
 canvas.addEventListener("touchstart", startDrawing, { passive: false });
-
 canvas.addEventListener("touchmove", draw, { passive: false });
-
 canvas.addEventListener("touchend", stopDrawing);
-
 window.addEventListener("resize", resizeCanvas);
 
 /* =====================================================
        TOOLS
     ===================================================== */
 
+function setEraser() {
+  erasing = true
+}
+
+function setBrush() {
+  erasing = false
+}
+
+function clearCanvas() {
+  ctx.fillStyle = "#ffffff";
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  sendEvent("CLEAR_CANVAS", {});
+}
+
+function setLineWidth(e) {
+  size = Number(e.target.value);;
+}
+
 const brush = document.getElementById("brush");
-
 const eraser = document.getElementById("eraser");
-
 const colorPicker = document.getElementById("color");
-
 const sizePicker = document.getElementById("size");
-
 const clear = document.getElementById("clear");
+clear.addEventListener('click', clearCanvas)
+sizePicker.addEventListener('input', setLineWidth)
 
 brush.addEventListener("click", () => {
-  erasing = false;
-
+  setBrush()
   brush.classList.add("active");
   eraser.classList.remove("active");
 });
 
 eraser.addEventListener("click", () => {
-  erasing = true;
-
+  setEraser();
   eraser.classList.add("active");
   brush.classList.remove("active");
 });
 
 colorPicker.addEventListener("input", (event) => {
   color = event.target.value;
-
   erasing = false;
-
   brush.classList.add("active");
   eraser.classList.remove("active");
 });
 
-sizePicker.addEventListener("input", (event) => {
-  size = Number(event.target.value);
-});
-
-clear.addEventListener("click", () => {
-  ctx.fillStyle = "#ffffff";
-
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-});
 
 /* =====================================================
        CHAT
     ===================================================== */
 
 const chatForm = document.getElementById("chatForm");
-
 const chatInput = document.getElementById("chatInput");
-
 const messages = document.getElementById("messages");
 
 function escapeHTML(value) {
   const div = document.createElement("div");
-
   div.textContent = value;
-
   return div.innerHTML;
 }
 
 function addMessage(username, text, usernameColor = "#8b5cf6") {
   const message = document.createElement("div");
-
   message.className = "message";
-
   message.innerHTML = `
-        <div
-          class="message-name"
-          style="color:${usernameColor}"
-        >
+        <div class="message-name"style="color:${usernameColor}">
           ${escapeHTML(username)}
         </div>
 
@@ -210,34 +299,21 @@ function addMessage(username, text, usernameColor = "#8b5cf6") {
       `;
 
   messages.appendChild(message);
-
   messages.scrollTop = messages.scrollHeight;
 }
 
 chatForm.addEventListener("submit", (event) => {
   event.preventDefault();
-
   const text = chatInput.value.trim();
-
-  if (!text) return;
-
+  if (!text || !text.length) return;
   addMessage("You", text, "#8b5cf6");
-
   chatInput.value = "";
 
-  setTimeout(() => {
-    const replies = [
-      "Hmm... maybe! 👀",
-      "Nope! Keep guessing 😆",
-      "You're getting warmer! 🔥",
-      "Interesting guess!",
-      "I have no idea 😂",
-    ];
-
-    const reply = replies[Math.floor(Math.random() * replies.length)];
-
-    addMessage("Sarah", reply, "#ec4899");
-  }, 700);
+  sendEvent("CHAT_MESSAGE", {
+    text,
+    IsGuess: false,
+    username: sessionId,
+  });
 });
 
 /* =====================================================
@@ -265,79 +341,3 @@ const timerInterval = setInterval(() => {
     addMessage("Game", "Time's up! 🎉", "#f59e0b");
   }
 }, 1000);
-
-/* =====================================================
-       MOCK PLAYER ANIMATION
-    ===================================================== */
-
-const statuses = [
-  "🤔 Guessing",
-  "💭 Thinking...",
-  "🔥 Almost!",
-  "👀 Watching",
-  "😂 What is this?",
-];
-
-const players = document.querySelectorAll(".player");
-
-setInterval(() => {
-  const index = Math.floor(Math.random() * players.length);
-
-  const status = players[index].querySelector(".player-status");
-
-  if (status) {
-    status.textContent = statuses[Math.floor(Math.random() * statuses.length)];
-  }
-}, 1700);
-
-/* =====================================================
-       INIT
-    ===================================================== */
-
-setTimeout(resizeCanvas, 100);
-
-console.log("HERE");
-
-// Wait for the browser to load the page content first
-window.addEventListener("DOMContentLoaded", () => {
-  const sessionId = "test-uuid-" + Math.floor(Math.random() * 1000);
-  const socket = new WebSocket(`ws://localhost:8080/ws?session_id=${sessionId}`);
-
-socket.onopen = () => {
-    console.log(`Connected to Go Server! ✅ (Session: ${sessionId})`);
-
-    // Send initial handshake event as JSON
-    const initEvent = {
-      type: "CHAT_MESSAGE",
-      payload: {
-        message: "Hello from client " + sessionId
-      }
-    };
-    socket.send(JSON.stringify(initEvent));
-  };
-
-  socket.onmessage = (event) => {
-    // writePump can batch multiple messages separated by \n
-    const rawMessages = event.data.split("\n");
-
-    rawMessages.forEach((rawMsg) => {
-      if (!rawMsg.trim()) return;
-
-      try {
-        const parsed = JSON.parse(rawMsg);
-        console.log("Parsed event from server:", parsed);
-      } catch (err) {
-        console.log("Raw message from server:", rawMsg);
-      }
-    });
-  };
-
-  socket.onerror = (err) => {
-    console.error("WebSocket Error ❌:", err);
-  };
-
-  socket.onclose = (event) => {
-    console.warn(`WebSocket Disconnected ⚠️ (Code: ${event.code}, Reason: ${event.reason})`);
-  };
-
-});

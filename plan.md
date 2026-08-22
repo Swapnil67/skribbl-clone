@@ -20,10 +20,10 @@ A production-grade, highly scalable, distributed real-time multiplayer drawing a
 * [✓] Initialize standard Go directory layout (`cmd/`, `internal/game/`, `internal/transport/`).
 * [✓] Setup standard HTTP router using `gin-gonic/gin` with health checks and CORS.
 * [✓] Implement ephemeral guest session handler issuing lightweight tokenized session IDs.
-* [ ] Establish low-overhead WebSocket handshake mechanics and origin validation using `gorilla/websocket`.
-* [ ] Construct thread-safe dual-goroutine client pipelines (`readPump`/`writePump`) with Ping/Pong keep-alives.
-* [ ] Build a channel-driven in-memory `Hub` managing thread-safe client registration and event dispatching.
-* [ ] **Canvas Sync Protocol:** Define strongly-typed event structs for real-time stroke coordinates, colors, actions, and chat messages.
+* [✓] Establish low-overhead WebSocket handshake mechanics and origin validation using `gorilla/websocket`.
+* [✓] Construct thread-safe dual-goroutine client pipelines (`readPump`/`writePump`) with Ping/Pong keep-alives.
+* [✓] Build a channel-driven in-memory `Hub` managing thread-safe client registration and event dispatching.
+* [✓] **Canvas Sync Protocol:** Define strongly-typed event structs for real-time stroke coordinates, colors, actions, and chat messages.
 * [ ] Deploy a minimal static HTML5 canvas harness to verify multi-client real-time synchronization.
 
 ### 🎮 Phase 2: In-Memory Game Loops & Concurrency (The Brain)
