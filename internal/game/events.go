@@ -73,6 +73,38 @@ type SystemAlertPayload struct {
 	Level   string `json:"level"` // * "info", "warning", "success"
 }
 
+const (
+	EventPhaseChange  EventType = "PHASE_CHANGE"
+	EventTimerTick    EventType = "TIMER_TICK"
+	EventWordChoices  EventType = "WORD_CHOICES"
+	EventWordSelected EventType = "WORD_SELECTED"
+	EventRoundEnd     EventType = "ROUND_END"
+)
+
+type PhaseChangePayload struct {
+	Phase       RoundPhase `json:"phase"`
+	CurrentTurn string     `json:"current_drawer_id,omitempty"`
+	RoundNumber int        `json:"round_number"`
+	MaxRounds   int        `json:"max_rounds"`
+}
+
+type TimerTickPayload struct {
+	RemainingSeconds int `json:"remaining_seconds"`
+}
+type WordChoicesPayload struct {
+	Words []string `json:"words"`
+}
+
+type WordSelectedPayload struct {
+	DrawerID   string `json:"drawer_id"`
+	WordLength int    `json:"word_length"` // Sent to guessers (e.g. "_ _ _ _ _ _")
+}
+
+type RoundEndPayload struct {
+	RevealedWord string                 `json:"revealed_word"`
+	Scores       map[string]PlayerState `json:"scores"`
+}
+
 func ProcessIncomingMessage(senderID string, rawMessage []byte) (*OutboundEvent, error) {
 	var env InboundEvent
 	if err := json.Unmarshal(rawMessage, &env); err != nil {

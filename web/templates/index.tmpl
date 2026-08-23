@@ -29,10 +29,8 @@
         </div>
 
         <div class="header-right">
-          <div class="round-pill">🎮 Round 3 / 8</div>
-
-          <div class="timer" id="timer">⏱ <span>72</span>s</div>
-
+          <div class="round-pill"></div>
+          <div class="timer" id="timer"></div>
           <button class="leave-btn">Leave</button>
         </div>
       </header>
@@ -112,43 +110,21 @@
 
       <section class="game">
         <div class="word-card panel">
-          <div class="word-label">Alex is drawing...</div>
-
+          <div class="word-label"></div>
           <div class="word">
-            <span class="hidden">_</span>
-            <span class="hidden">_</span>
-            A
-            <span class="hidden">_</span>
-            <span class="hidden">_</span>
           </div>
         </div>
 
         <div class="canvas-wrapper panel">
           <canvas id="canvas"></canvas>
 
-          <div class="drawing-label">✏️ Alex's canvas</div>
+          <div class="drawing-label"></div>
 
           <div class="toolbar">
             <button class="tool active" id="brush" title="Brush">🖌️</button>
-
             <button class="tool" id="eraser" title="Eraser">🧽</button>
-
-            <input
-              class="color-picker"
-              type="color"
-              id="color"
-              value="#25232b"
-            />
-
-            <input
-              class="size"
-              type="range"
-              id="size"
-              min="2"
-              max="30"
-              value="5"
-            />
-
+            <input class="color-picker" type="color" id="color" value="#25232b" />
+            <input class="size" type="range" id="size" min="2" max="30" value="5" />
             <button class="tool" id="clear" title="Clear canvas">🗑️</button>
           </div>
         </div>

@@ -9,10 +9,17 @@ const ctx = canvas.getContext("2d");
 let socket = null;
 let drawing = false;
 let lastX = 0, lastY = 0;
+let currentDrawerId = null
+let currentRoundNumber = null, maxRounds = null
 
 let color = "#25232b";
 let size = 5;
 let erasing = false;
+
+const wordCard = document.querySelector(".word-card");
+const drawingLabel = document.querySelector(".drawing-label");
+const timer = document.getElementById("timer");
+
 
 // Unique session identifier for this tab
 const sessionId = "user-" + Math.floor(Math.random() * 10000);
@@ -23,6 +30,7 @@ function getQueryParam(param) {
   return urlParams.get(param);
 }
 
+
 /* =====================================================
        INIT
     ===================================================== */
@@ -30,11 +38,17 @@ function getQueryParam(param) {
 // Initialize on page load
 window.addEventListener("DOMContentLoaded", () => {
   initCanvasSync("paintCanvas");
+  updateCurrentRound()
 });
 
-function initCanvasSync() {
-  const roomId = getQueryParam("room_id") || "DEFAULT";
+function updateCurrentRound() {
+  if (currentRoundNumber && maxRounds)
+    document.querySelector(".round-pill").textContent =
+      `🎮 Round ${currentRoundNumber} / ${maxRounds}`;
+}
 
+function initCanvasSync() {
+  const roomId = getQueryParam("room_id") || "DGUNW3";
   resizeCanvas()
   connectWebSocket(roomId)
 }
@@ -50,15 +64,14 @@ function connectWebSocket(roomId) {
   };
 
   socket.onmessage = (event) => {
+    // console.log(event);
     // writePump can batch multiple messages separated by \n
     const rawMessages = event.data.split("\n");
 
     rawMessages.forEach((rawMsg) => {
       if (!rawMsg.trim()) return;
-
       try {
         const packet = JSON.parse(rawMsg);
-        console.log("Parsed event from server:", packet);
         handleIncomingEvent(packet);
       } catch (err) {
         console.log("Raw message from server:", err);
@@ -86,11 +99,36 @@ function sendEvent(type, payload) {
 // --- 3. Inbound Event Router ---
 function handleIncomingEvent(packet) {
   const { type, sender_id, payload } = packet;
+  console.log(packet);
+  
 
   // * Prevent echoing our own actions back onto the canvas
   if (sender_id == sessionId) return;
 
   switch (type) {
+    case "PHASE_CHANGE":
+      handlePhaseChange(payload);
+      break;
+
+    case "WORD_SELECTED":
+      // * Hide this from the drawer
+      const { word_length } = payload;
+      const guessWordDiv = document.createElement('div')
+      guessWordDiv.classList.add('word')
+      for (let i = 0; i < word_length; i++) {
+        const span = document.createElement('span')
+        span.classList.add('hidden')
+        span.textContent = '_'
+        guessWordDiv.appendChild(span);
+      }
+      console.log("guessWordDiv ", guessWordDiv);
+      wordCard.appendChild(guessWordDiv)
+      break;
+
+    case "TIMER_TICK":
+      timer.innerHTML = `⏱ <span>${payload?.remaining_seconds}</span>s`;
+      break;
+
     case "DRAW_STROKE":
       renderStroke(payload);
       break;
@@ -104,8 +142,31 @@ function handleIncomingEvent(packet) {
     //   break;
 
     case "CHAT_MESSAGE":
-      addMessage(payload.username, payload.text)
+      addMessage(payload.username, payload.text);
       break;
+  }
+}
+
+function handlePhaseChange(payload) {
+  const { phase, current_drawer_id } = payload
+  console.log("phase ", phase);
+  if (phase == "WORD_SELECTION") {
+    const phaseTitleEle = document.createElement("div");
+    phaseTitleEle.id = 'phaseTitle'
+    phaseTitleEle.classList.add("system-message");
+    phaseTitleEle.textContent = `${current_drawer_id} is selecting the word`;
+    wordCard.insertAdjacentElement("afterbegin", phaseTitleEle);
+
+    currentDrawerId = current_drawer_id
+    currentRoundNumber = payload?.round_number
+    maxRounds = payload?.max_rounds
+    updateCurrentRound()
+  } else if (phase == "DRAWING") {
+    const phaseTitleEle = document.querySelector("#phaseTitle");
+    phaseTitleEle?.remove();
+    document.querySelector(".word-label").textContent =
+    `${current_drawer_id} is drawing...`;
+    drawingLabel.textContent = `✏️ ${current_drawer_id} canvas`
   }
 }
 
@@ -329,24 +390,16 @@ chatForm.addEventListener("submit", (event) => {
        TIMER
     ===================================================== */
 
-const timer = document.getElementById("timer");
-
-let seconds = 72;
-
-const timerInterval = setInterval(() => {
-  seconds--;
-
-  timer.innerHTML = `⏱ <span>${seconds}</span>s`;
-
-  if (seconds <= 10) {
-    timer.classList.add("danger");
-  }
-
-  if (seconds <= 0) {
-    clearInterval(timerInterval);
-
-    timer.innerHTML = "⏰ 0s";
-
-    addMessage("Game", "Time's up! 🎉", "#f59e0b");
-  }
-}, 1000);
+// let seconds = 72;
+// const timerInterval = setInterval(() => {
+//   seconds--;
+//   timer.innerHTML = `⏱ <span>${seconds}</span>s`;
+//   if (seconds <= 10) {
+//     timer.classList.add("danger");
+//   }
+//   if (seconds <= 0) {
+//     clearInterval(timerInterval);
+//     timer.innerHTML = "⏰ 0s";
+//     addMessage("Game", "Time's up! 🎉", "#f59e0b");
+//   }
+// }, 1000);

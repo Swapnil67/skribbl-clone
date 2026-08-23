@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
@@ -42,6 +43,7 @@ func (h *Handler) HandleWebSocket(c *gin.Context) {
 
 	// * 2. Extract room_id
 	roomID := c.Query("room_id")
+	fmt.Printf("roomID: %s\n", roomID)
 	if roomID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing room_id query parameter"})
 		return
@@ -49,6 +51,7 @@ func (h *Handler) HandleWebSocket(c *gin.Context) {
 
 	// * 3. Lookup Room
 	room, err := h.Manager.GetRoom(roomID)
+	fmt.Printf("err: %v\n", err)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Room does not exist or has expired"})
 		return

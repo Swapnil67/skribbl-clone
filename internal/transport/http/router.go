@@ -17,7 +17,7 @@ func NewRouter(manager *ws.RoomManager) *gin.Engine {
 	r.Use(gin.Recovery())
 
 	wsHandler := ws.NewHandler(manager)
-	roomHandler := NewRoomHandler(manager)
+	roomHandler := NewRoomHandler(manager) // * Room Routes Handler
 
 	// * 2. Load HTML templates & static files (JS/CSS)
 	r.LoadHTMLGlob("web/templates/*")

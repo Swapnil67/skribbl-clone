@@ -3,6 +3,7 @@ package http
 import (
 	"errors"
 	"net/http"
+	"skribbl-clone/internal/game"
 	"skribbl-clone/internal/transport/ws"
 
 	"github.com/gin-gonic/gin"
@@ -85,7 +86,7 @@ func (h *RoomHandler) HandleGetRoom(c *gin.Context) {
 	}
 
 	currentPlayers := room.ClientCount()
-	canJoin := currentPlayers < room.MaxPlayers && room.State == ws.StateLobby
+	canJoin := currentPlayers < room.MaxPlayers && room.State == game.PhaseLobby
 
 	c.JSON(http.StatusOK, RoomDetailResponse{
 		RoomID:      room.ID,
