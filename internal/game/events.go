@@ -15,6 +15,17 @@ const (
 	EventUndoStroke  EventType = "UNDO_STROKE"
 	EventChatMessage EventType = "CHAT_MESSAGE"
 	EventSystemAlert EventType = "SYSTEM_ALERT"
+
+	EventPhaseChange      EventType = "PHASE_CHANGE"
+	EventTimerTick        EventType = "TIMER_TICK"
+	EventWordChoices      EventType = "WORD_CHOICES"
+	EventWordSelected     EventType = "WORD_SELECTED"
+	EventRoundEnd         EventType = "ROUND_END"
+	EventDrawerSecretWord EventType = "DRAWER_SECRET_WORD"
+
+	EventPlayerGuessed   EventType = "PLAYER_GUESSED"
+	EventCloseGuessAlert EventType = "CLOSE_GUESS_ALERT"
+	EventScoreUpdate     EventType = "SCORE_UPDATE"
 )
 
 // * InboundEvent is the general envelope for incoming frames from clients
@@ -73,14 +84,6 @@ type SystemAlertPayload struct {
 	Level   string `json:"level"` // * "info", "warning", "success"
 }
 
-const (
-	EventPhaseChange  EventType = "PHASE_CHANGE"
-	EventTimerTick    EventType = "TIMER_TICK"
-	EventWordChoices  EventType = "WORD_CHOICES"
-	EventWordSelected EventType = "WORD_SELECTED"
-	EventRoundEnd     EventType = "ROUND_END"
-)
-
 type PhaseChangePayload struct {
 	Phase       RoundPhase `json:"phase"`
 	CurrentTurn string     `json:"current_drawer_id,omitempty"`
@@ -103,6 +106,20 @@ type WordSelectedPayload struct {
 type RoundEndPayload struct {
 	RevealedWord string                 `json:"revealed_word"`
 	Scores       map[string]PlayerState `json:"scores"`
+}
+
+type PlayerGuessedPayload struct {
+	SessionID    string `json:"session_id"`
+	Username     string `json:"username"`
+	PointsEarned int    `json:"points_earned"`
+}
+
+type CloseGuessAlertPayload struct {
+	Message string `json:"message"`
+}
+
+type ScoreUpdatePayload struct {
+	Scores map[string]int `json:"scores"`
 }
 
 func ProcessIncomingMessage(senderID string, rawMessage []byte) (*OutboundEvent, error) {

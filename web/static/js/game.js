@@ -2,15 +2,18 @@
        CANVAS
     ===================================================== */
 
-    // --- Global State ---
+// --- Global State ---
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
 let socket = null;
+let isMyTurn = false;
 let drawing = false;
-let lastX = 0, lastY = 0;
-let currentDrawerId = null
-let currentRoundNumber = null, maxRounds = null
+let lastX = 0,
+  lastY = 0;
+let currentDrawerId = null;
+let currentRoundNumber = null,
+  maxRounds = null;
 
 let color = "#25232b";
 let size = 5;
@@ -19,7 +22,6 @@ let erasing = false;
 const wordCard = document.querySelector(".word-card");
 const drawingLabel = document.querySelector(".drawing-label");
 const timer = document.getElementById("timer");
-
 
 // Unique session identifier for this tab
 const sessionId = "user-" + Math.floor(Math.random() * 10000);
@@ -30,7 +32,6 @@ function getQueryParam(param) {
   return urlParams.get(param);
 }
 
-
 /* =====================================================
        INIT
     ===================================================== */
@@ -38,7 +39,7 @@ function getQueryParam(param) {
 // Initialize on page load
 window.addEventListener("DOMContentLoaded", () => {
   initCanvasSync("paintCanvas");
-  updateCurrentRound()
+  updateCurrentRound();
 });
 
 function updateCurrentRound() {
@@ -48,9 +49,9 @@ function updateCurrentRound() {
 }
 
 function initCanvasSync() {
-  const roomId = getQueryParam("room_id") || "DGUNW3";
-  resizeCanvas()
-  connectWebSocket(roomId)
+  const roomId = getQueryParam("room_id") || "45S7HL";
+  resizeCanvas();
+  connectWebSocket(roomId);
 }
 
 function connectWebSocket(roomId) {
@@ -64,7 +65,6 @@ function connectWebSocket(roomId) {
   };
 
   socket.onmessage = (event) => {
-    // console.log(event);
     // writePump can batch multiple messages separated by \n
     const rawMessages = event.data.split("\n");
 
@@ -100,7 +100,6 @@ function sendEvent(type, payload) {
 function handleIncomingEvent(packet) {
   const { type, sender_id, payload } = packet;
   console.log(packet);
-  
 
   // * Prevent echoing our own actions back onto the canvas
   if (sender_id == sessionId) return;
@@ -110,19 +109,32 @@ function handleIncomingEvent(packet) {
       handlePhaseChange(payload);
       break;
 
+    case "DRAWER_SECRET_WORD":
+      // * The drawer receives and displays the actual word
+      if (!isMyTurn) return;
+
+      let wordEle = document.querySelector(".word");
+      if (!wordEle) {
+        wordEle = document.createElement("div");
+        wordEle.classList.add("word");
+        wordCard.appendChild(wordEle);
+      }
+      wordEle.innerText = `${payload.word.toUpperCase()}`;
+      break;
+
     case "WORD_SELECTED":
       // * Hide this from the drawer
+      if (isMyTurn) return;
       const { word_length } = payload;
-      const guessWordDiv = document.createElement('div')
-      guessWordDiv.classList.add('word')
+      const guessWordDiv = document.createElement("div");
+      guessWordDiv.classList.add("word");
       for (let i = 0; i < word_length; i++) {
-        const span = document.createElement('span')
-        span.classList.add('hidden')
-        span.textContent = '_'
+        const span = document.createElement("span");
+        span.classList.add("hidden");
+        span.textContent = "_";
         guessWordDiv.appendChild(span);
       }
-      console.log("guessWordDiv ", guessWordDiv);
-      wordCard.appendChild(guessWordDiv)
+      wordCard.appendChild(guessWordDiv);
       break;
 
     case "TIMER_TICK":
@@ -130,7 +142,9 @@ function handleIncomingEvent(packet) {
       break;
 
     case "DRAW_STROKE":
-      renderStroke(payload);
+      if (sender_id != sessionId) {
+        renderStroke(payload);
+      }
       break;
 
     case "CLEAR_CANVAS":
@@ -141,32 +155,70 @@ function handleIncomingEvent(packet) {
     //   console.log("Undo triggered by:", sender_id);
     //   break;
 
+    // * --- Guess & Chat Events ---
     case "CHAT_MESSAGE":
       addMessage(payload.username, payload.text);
+      break;
+
+    case "PLAYER_GUESSED":
+      // appendSystemMessage(`🎉 ${payload.username} guessed the word! (+${payload.points_earned} pts)`, "system-success");
+      // markPlayerGuessed(payload.session_id);
+      break;
+
+    case "CLOSE_GUESS_ALERT":
+      // appendSystemMessage(`⚠️ ${payload.message}`, "system-close");
+      break;
+
+    case "SYSTEM_ALERT":
+      // appendSystemMessage(`🔔 ${payload.message}`, "system-warning");
+      break;
+
+    case "SCORE_UPDATE":
+      // renderScoreboard(payload.scores);
       break;
   }
 }
 
 function handlePhaseChange(payload) {
-  const { phase, current_drawer_id } = payload
+  const { phase, current_drawer_id } = payload;
+
+  isMyTurn = payload.current_drawer_id === sessionId;
+
   console.log("phase ", phase);
+
   if (phase == "WORD_SELECTION") {
+    document.querySelector(".word-label").textContent = "";
+    document.querySelector(".word")?.remove();
+
     const phaseTitleEle = document.createElement("div");
-    phaseTitleEle.id = 'phaseTitle'
+    phaseTitleEle.id = "phaseTitle";
     phaseTitleEle.classList.add("system-message");
-    phaseTitleEle.textContent = `${current_drawer_id} is selecting the word`;
+    let message = isMyTurn
+      ? "Your turn to draw! Choosing word..."
+      : `${current_drawer_id} is selecting the word`;
+    phaseTitleEle.textContent = message;
     wordCard.insertAdjacentElement("afterbegin", phaseTitleEle);
 
-    currentDrawerId = current_drawer_id
-    currentRoundNumber = payload?.round_number
-    maxRounds = payload?.max_rounds
-    updateCurrentRound()
+    currentDrawerId = current_drawer_id;
+    currentRoundNumber = payload?.round_number;
+    maxRounds = payload?.max_rounds;
+    updateCurrentRound();
   } else if (phase == "DRAWING") {
     const phaseTitleEle = document.querySelector("#phaseTitle");
     phaseTitleEle?.remove();
-    document.querySelector(".word-label").textContent =
-    `${current_drawer_id} is drawing...`;
-    drawingLabel.textContent = `✏️ ${current_drawer_id} canvas`
+    const wordLabel = document.querySelector(".word-label");
+
+    if (isMyTurn) {
+      // 🎨 Drawer State
+      canvas.style.cursor = "crosshair";
+      wordLabel.textContent = "You are drawing...";
+    } else {
+      // 🔍 Guesser State
+      canvas.style.cursor = "not-allowed";
+      wordLabel.textContent = `${current_drawer_id} is drawing...`;
+    }
+
+    drawingLabel.textContent = `✏️ ${current_drawer_id} canvas`;
   }
 }
 
@@ -296,21 +348,22 @@ window.addEventListener("resize", resizeCanvas);
     ===================================================== */
 
 function setEraser() {
-  erasing = true
+  erasing = true;
 }
 
 function setBrush() {
-  erasing = false
+  erasing = false;
 }
 
 function clearCanvas() {
+  if (!isMyTurn) return;
   ctx.fillStyle = "#ffffff";
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   sendEvent("CLEAR_CANVAS", {});
 }
 
 function setLineWidth(e) {
-  size = Number(e.target.value);;
+  size = Number(e.target.value);
 }
 
 const brush = document.getElementById("brush");
@@ -318,11 +371,11 @@ const eraser = document.getElementById("eraser");
 const colorPicker = document.getElementById("color");
 const sizePicker = document.getElementById("size");
 const clear = document.getElementById("clear");
-clear.addEventListener('click', clearCanvas)
-sizePicker.addEventListener('input', setLineWidth)
+clear.addEventListener("click", clearCanvas);
+sizePicker.addEventListener("input", setLineWidth);
 
 brush.addEventListener("click", () => {
-  setBrush()
+  setBrush();
   brush.classList.add("active");
   eraser.classList.remove("active");
 });
@@ -339,7 +392,6 @@ colorPicker.addEventListener("input", (event) => {
   brush.classList.add("active");
   eraser.classList.remove("active");
 });
-
 
 /* =====================================================
        CHAT
@@ -380,26 +432,7 @@ chatForm.addEventListener("submit", (event) => {
   chatInput.value = "";
 
   sendEvent("CHAT_MESSAGE", {
-    text,
-    IsGuess: false,
     username: sessionId,
+    text,
   });
 });
-
-/* =====================================================
-       TIMER
-    ===================================================== */
-
-// let seconds = 72;
-// const timerInterval = setInterval(() => {
-//   seconds--;
-//   timer.innerHTML = `⏱ <span>${seconds}</span>s`;
-//   if (seconds <= 10) {
-//     timer.classList.add("danger");
-//   }
-//   if (seconds <= 0) {
-//     clearInterval(timerInterval);
-//     timer.innerHTML = "⏰ 0s";
-//     addMessage("Game", "Time's up! 🎉", "#f59e0b");
-//   }
-// }, 1000);

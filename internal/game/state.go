@@ -13,8 +13,8 @@ const (
 )
 
 const (
-	DurationWordSelect = 15 * time.Second
-	DurationDrawing    = 60 * time.Second
+	DurationWordSelect = 5 * time.Second
+	DurationDrawing    = 20 * time.Second
 	DurationSummary    = 5 * time.Second
 	TotalRounds        = 3
 )

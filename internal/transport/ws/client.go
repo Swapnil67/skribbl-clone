@@ -2,6 +2,7 @@ package ws
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"skribbl-clone/internal/game"
 	"time"
@@ -40,7 +41,7 @@ func NewClient(room *Room, conn *websocket.Conn, sessionID string) *Client {
 	}
 }
 
-// * readPump pumps messages from the websocket connection to the hub.
+// * readPump pumps messages from the websocket connection to the room.
 func (c *Client) ReadPump() {
 	defer func() {
 		c.Room.Unregister <- c
@@ -67,22 +68,37 @@ func (c *Client) ReadPump() {
 			break
 		}
 
-		// * 1. Process and validate the raw JSON into an OutboundEvent
-		outbountEvent, err := game.ProcessIncomingMessage(c.SessionID, rawMessage)
-		if err != nil {
-			log.Printf("Invalid message from %s: %v", c.SessionID, err)
-			break
-		}
-
-		// * 2. Serialize back to JSON bytes for the Hub to fan-out
-		broadcaseBytes, err := json.Marshal(outbountEvent)
-		if err != nil {
-			log.Printf("Marshal error: %v", err)
+		// * 1. Unmarshal into the general InboundEvent envelope
+		var env game.InboundEvent
+		if err := json.Unmarshal(rawMessage, &env); err != nil {
+			log.Printf("Malformed packet from %s: %v", c.SessionID, err)
 			continue
 		}
 
-		// * 3. Forward clean payload to the Hub for fan-out
-		c.Hub.Broadcast <- broadcaseBytes
+		switch env.Type {
+
+		// * Intercept chat to validate guesses against target word
+		case game.EventChatMessage:
+			var chat game.ChatMessagePayload
+			if err := json.Unmarshal(env.Payload, &chat); err == nil {
+				c.Room.HandleChatMessage(c, chat.Text)
+			}
+
+		case game.EventDrawStroke, game.EventClearCanvas, game.EventUndoStroke:
+			c.Room.mu.RLock()
+			isDrawingPhase := c.Room.State == game.PhaseDrawing
+			isDrawer := len(c.Room.drawerOrder) > c.Room.drawerIndex && c.Room.drawerOrder[c.Room.drawerIndex] == c.SessionID
+			c.Room.mu.RUnlock()
+
+			if !isDrawingPhase || !isDrawer {
+				continue // * Drop unauthorized draw packets
+			}
+
+			fmt.Printf("%s drawing\n", c.SessionID)
+
+			// * Forward valid draw actions to room clients
+			c.Room.Broadcast <- rawMessage
+		}
 	}
 }
 
@@ -132,5 +148,22 @@ func (c *Client) WritePump() {
 				return
 			}
 		}
+	}
+}
+
+func (c *Client) SendEvent(eventType game.EventType, payload interface{}) {
+	event := game.OutboundEvent{
+		Type:      eventType,
+		Timestamp: time.Now().UnixMilli(),
+		Payload:   payload,
+	}
+
+	raw, err := json.Marshal(event)
+	if err != nil {
+		return
+	}
+	select {
+	case c.Send <- raw:
+	default:
 	}
 }

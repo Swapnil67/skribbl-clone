@@ -1,5 +1,29 @@
 # Skribbl Clone
 
+### 1. High-Level Multi-Node Architecture
+
+```
+                       [ Client A ]          [ Client B ]
+                            │                     │
+                            ▼                     ▼
+                     ┌─────────────┐       ┌─────────────┐
+                     │ Go Server 1 │       │ Go Server 2 │
+                     └──────┬──────┘       └──────┬──────┘
+                            │                     │
+             Publish Events │                     │ Subscribe & Fan-Out
+                            ▼                     ▼
+             ┌──────────────────────────────────────────────────┐
+             │                   REDIS CLUSTER                  │
+             │                                                  │
+             │  • Pub/Sub Bus    (room:{id}:events)             │
+             │  • Hashes         (room:{id}:meta)               │
+             │  • Sorted Sets    (room:{id}:leaderboard)        │
+             │  • Lists/Streams  (room:{id}:strokes)            │
+             │  • Sets           (room:{id}:members)            │
+             └──────────────────────────────────────────────────┘
+
+```
+
 ### Summary of Structure
 
 ```

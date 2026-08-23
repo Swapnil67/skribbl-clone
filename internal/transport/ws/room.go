@@ -21,13 +21,15 @@ type Room struct {
 	players map[string]*game.PlayerState
 
 	// * Game Loop Turn Tracking
-	currentRound  int
-	drawingOrder  []string
-	drawerIndex   int
-	currentWord   string
-	timeRemaning  int
-	isLoopRunning bool
-	stopLoop      chan struct{}
+	currentRound    int
+	drawerOrder     []string
+	drawerIndex     int
+	currentWord     string
+	timeRemaning    int
+	isLoopRunning   bool
+	stopLoop        chan struct{}
+	currentDuration int
+	earlyEndChan    chan struct{}
 
 	// * Channels for client lifecycle & messaging
 	Broadcast  chan []byte
@@ -38,16 +40,16 @@ type Room struct {
 
 func NewRoom(id string, maxPlayers int, manager *RoomManager) *Room {
 	return &Room{
-		ID:           id,
-		State:        game.PhaseLobby,
-		MaxPlayers:   maxPlayers,
-		clients:      make(map[*Client]bool),
-		players:      make(map[string]*game.PlayerState),
-		drawingOrder: make([]string, 0),
-		Broadcast:    make(chan []byte, 128),
-		Register:     make(chan *Client),
-		Unregister:   make(chan *Client),
-		manager:      manager,
+		ID:          id,
+		State:       game.PhaseLobby,
+		MaxPlayers:  maxPlayers,
+		clients:     make(map[*Client]bool),
+		players:     make(map[string]*game.PlayerState),
+		drawerOrder: make([]string, 0),
+		Broadcast:   make(chan []byte, 128),
+		Register:    make(chan *Client),
+		Unregister:  make(chan *Client),
+		manager:     manager,
 	}
 }
 
@@ -67,7 +69,7 @@ func (r *Room) Run() {
 					Username:  "Player-" + client.SessionID[:4],
 					Score:     0,
 				}
-				r.drawingOrder = append(r.drawingOrder, client.SessionID)
+				r.drawerOrder = append(r.drawerOrder, client.SessionID)
 			}
 			total := len(r.clients)
 			r.mu.Unlock()
@@ -110,17 +112,6 @@ func (r *Room) Run() {
 
 		case message := <-r.Broadcast:
 			r.broadcastRaw(message)
-			// r.mu.RLock()
-			// for client := range r.clients {
-			// 	select {
-			// 	case client.Send <- message:
-			// 	default:
-			// 		// * Slow consumer: channel full, drop client to prevent blocking others
-			// 		close(client.Send)
-			// 		delete(r.clients, client)
-			// 	}
-			// }
-			// r.mu.RUnlock()
 		}
 	}
 }
@@ -142,7 +133,7 @@ func (r *Room) startGameLoop() {
 		// * 2. Inner Loop: Iterates through the player queue for this round
 		for {
 			r.mu.RLock()
-			totalDrawers := len(r.drawingOrder)
+			totalDrawers := len(r.drawerOrder)
 			curIdx := r.drawerIndex
 			r.mu.RUnlock()
 
@@ -176,7 +167,7 @@ func (r *Room) startGameLoop() {
 
 func (r *Room) runTurnCycle() {
 	r.mu.Lock()
-	currentDrawerID := r.drawingOrder[r.drawerIndex]
+	currentDrawerID := r.drawerOrder[r.drawerIndex]
 	// * Reset previous turn's guess status for every player
 	for _, p := range r.players {
 		p.HasGuessed = false
@@ -212,6 +203,13 @@ func (r *Room) runTurnCycle() {
 		RoundNumber: r.currentRound,
 		MaxRounds:   game.TotalRounds,
 	})
+
+	// * Send the private word to the active drawer
+	r.sendPrivateToPlayer(currentDrawerID, game.EventDrawerSecretWord, map[string]string{
+		"word": r.currentWord,
+	})
+
+	// * Broadcast only the length to the room (guessers)
 	r.broadcastEvent(game.EventWordSelected, game.WordSelectedPayload{
 		DrawerID:   currentDrawerID,
 		WordLength: len(r.currentWord),
@@ -278,6 +276,16 @@ func (r *Room) pickWordChoices(count int) []string {
 	return shuffled[:count]
 }
 
+func (r *Room) sendPrivateToPlayer(currentDrawerID string, eventType game.EventType, payload interface{}) {
+	r.mu.RLock()
+	for client := range r.clients {
+		if client.SessionID == currentDrawerID {
+			client.SendEvent(eventType, payload)
+		}
+	}
+	r.mu.RUnlock()
+}
+
 func (r *Room) broadcastEvent(eventType game.EventType, payload interface{}) {
 	event := game.OutboundEvent{
 		Type:      eventType,
@@ -307,4 +315,106 @@ func (r *Room) ClientCount() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return len(r.clients)
+}
+
+func (r *Room) HandleChatMessage(client *Client, rawText string) {
+	r.mu.Lock()
+	currentState := r.State
+	targetWord := r.currentWord
+	currentDrawerID := ""
+	if len(r.drawerOrder) > r.drawerIndex {
+		currentDrawerID = r.drawerOrder[r.drawerIndex]
+	}
+	player, playerExists := r.players[client.SessionID]
+	r.mu.Unlock()
+	if !playerExists {
+		return
+	}
+
+	// * 1. If not in DRAWING phase or player is the active drawer, broadcast as regular chat
+	if currentState != game.PhaseDrawing || currentDrawerID == client.SessionID {
+		r.broadcastChatMessage(player.Username, rawText, false)
+		return
+	}
+
+	// * 2. If the player has ALREADY guessed correctly this turn, do not let them give hints
+	if player.HasGuessed {
+		// * Send private system warning to this client only
+		client.SendEvent(game.EventSystemAlert, game.SystemAlertPayload{
+			Message: "You already guessed the word! Keep it secret.",
+			Level:   "warning",
+		})
+		return
+	}
+
+	// * 3. Evaluate guess against target word
+	result := game.EvaluateGuess(rawText, targetWord)
+
+	switch result {
+	case game.GuessExact:
+		// Mark player as guessed
+		r.mu.Lock()
+		player.HasGuessed = true
+		remaningSec := r.timeRemaning
+
+		// * Calculate Points
+		guesserPoints := game.CalculateGuesserPoints(remaningSec, (int(game.DurationDrawing.Seconds())))
+		player.Score += guesserPoints
+
+		// * Reward Drawer
+		if drawer, ok := r.players[currentDrawerID]; ok {
+			drawer.Score += game.DrawerBaseBonus
+		}
+
+		// * Prepare updated score map
+		scoreSnapshot := make(map[string]int)
+		allGuessersFinished := true
+		for id, p := range r.players {
+			scoreSnapshot[id] = p.Score
+			if id != currentDrawerID && !p.HasGuessed {
+				allGuessersFinished = false
+			}
+		}
+		r.mu.Unlock()
+
+		// * Broadcast success announcement (Censors the actual word!)
+		r.broadcastEvent(game.EventPlayerGuessed, game.PlayerGuessedPayload{
+			SessionID:    client.SessionID,
+			Username:     player.Username,
+			PointsEarned: guesserPoints,
+		})
+
+		// * Broadcast updated scores
+		r.broadcastEvent(game.EventScoreUpdate, game.ScoreUpdatePayload{
+			Scores: scoreSnapshot,
+		})
+
+		// * If all non-drawers guessed correctly, fast-forward round
+		if allGuessersFinished {
+			select {
+			case r.earlyEndChan <- struct{}{}:
+			default:
+			}
+		}
+
+	case game.GuessClose:
+		// * Send private alert ONLY to this player
+		client.SendEvent(game.EventCloseGuessAlert, game.CloseGuessAlertPayload{
+			Message: "'" + rawText + "' is very close!",
+		})
+		// * Still broadcast their guess as a regular message
+		r.broadcastChatMessage(player.Username, rawText, true)
+
+	case game.GuessIncorrect:
+		// * Normal incorrect guess -> broadcast to room chat
+		r.broadcastChatMessage(player.Username, rawText, true)
+	}
+}
+
+func (r *Room) broadcastChatMessage(username, text string, isGuess bool) {
+	r.broadcastEvent(game.EventChatMessage, game.ChatMessagePayload{
+		Username: username,
+		Text:     text,
+		IsGuess:  isGuess,
+	})
 }

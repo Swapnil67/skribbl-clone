@@ -30,9 +30,9 @@ A production-grade, highly scalable, distributed real-time multiplayer drawing a
 
 * [✓] **Multi-Room Manager & Partitioned Hubs:** Refactor the global Hub into isolated per-room hubs using `sync.RWMutex` to partition drawing traffic and lifecycle events.
 * [✓] **Channel Matchmaking Engine:** Build a centralized pool worker goroutine routing incoming guest sessions into 5-player public rooms or private invite codes.
-* [] **State Machine & Ticker Game Loop:** Manage per-room match phases (`LOBBY`, `WORD_SELECTION`, `DRAWING`, `ROUND_SUMMARY`) using non-blocking Go `time.Ticker` bindings.
-* [] **Fuzzy Guess Matcher:** Implement a Levenshtein distance string similarity engine to validate chat guesses and send private "close guess" alerts.
-* [] **Dynamic Scoring & Turn Arbiter:** Calculate decay scores based on response latency, rotate active drawer permissions, and censor correct guesses in public room chat.
+* [✓] **State Machine & Ticker Game Loop:** Manage per-room match phases (`LOBBY`, `WORD_SELECTION`, `DRAWING`, `ROUND_SUMMARY`) using non-blocking Go `time.Ticker` bindings.
+* [✓] **Fuzzy Guess Matcher:** Implement a Levenshtein distance string similarity engine to validate chat guesses and send private "close guess" alerts.
+* [✓] **Dynamic Scoring & Turn Arbiter:** Calculate decay scores based on response latency, rotate active drawer permissions, and censor correct guesses in public room chat.
 
 ### 🌐 Phase 3: Distributed State & Scale (The Senior Showcase)
 
@@ -40,6 +40,8 @@ A production-grade, highly scalable, distributed real-time multiplayer drawing a
 * [] **Distributed Room State in Redis:** Persist active room metadata, player scores, and round states into Redis Hashes with TTLs for cross-server visibility.
 * [] **Ephemeral Session Reconnection:** Cache disconnected guest state in Redis for 30 seconds to allow seamless browser refresh recovery without point loss.
 * [] **Token-Bucket Chat Rate Limiter:** Implement a per-socket rate limiter in Go to throttle spam and mitigate automated dictionary attacks on guesses.
+* [] **Stroke History & Re-hydration** $\rightarrow$ Implement replay buffers so reconnecting players catch up instantly.
+
 
 ### 📊 Phase 4: Production Diagnostics & Observability (The Production Ready Check)
 

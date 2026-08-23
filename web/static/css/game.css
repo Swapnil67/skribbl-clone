@@ -339,6 +339,11 @@
     	border: 2px dashed var(--purple);
     }
 
+	.player.guessed {
+    	background: #e7ffee;
+    	border: 2px dashed var(--green);
+    }
+
     .crown {
     	position: absolute;
     	top: -9px;
